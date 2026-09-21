@@ -788,26 +788,28 @@ router.patch(
         });
       }
     }
-    const [updated] = await db
-      .update(tasksTable)
-      .set({
-        ...(body.data.status ? { status: body.data.status } : {}),
-        ...(body.data.title ? { title: body.data.title } : {}),
-        ...(body.data.dueDate !== undefined
-          ? { dueDate: toDateString(body.data.dueDate) }
-          : {}),
-      })
-      .where(
-        and(
-          eq(tasksTable.id, params.data.taskId),
-          eq(tasksTable.householdId, params.data.householdId),
-        ),
-      )
-      .returning();
-    if (!updated) {
-      res.status(404).json({ error: "Task not found" });
-      return;
-    }
+    const taskChanges = {
+      ...(body.data.status ? { status: body.data.status } : {}),
+      ...(body.data.title ? { title: body.data.title } : {}),
+      ...(body.data.dueDate !== undefined
+        ? { dueDate: toDateString(body.data.dueDate) }
+        : {}),
+    };
+    const updated =
+      Object.keys(taskChanges).length > 0
+        ? (
+            await db
+              .update(tasksTable)
+              .set(taskChanges)
+              .where(
+                and(
+                  eq(tasksTable.id, params.data.taskId),
+                  eq(tasksTable.householdId, params.data.householdId),
+                ),
+              )
+              .returning()
+          )[0] ?? existing
+        : existing;
     if (body.data.status && body.data.status !== existing.status) {
       if (body.data.status === "done") {
         await recordActivity({
