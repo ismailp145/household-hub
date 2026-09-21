@@ -834,3 +834,73 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getUpdateTaskMutationOptions(options));
     }
 
+export const getDeleteTaskUrl = (householdId: string,
+    taskId: string,) => {
+
+
+
+
+  return `/api/households/${householdId}/tasks/${taskId}`
+}
+
+export const deleteTask = async (householdId: string,
+    taskId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteTaskUrl(householdId,taskId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTaskMutationKey = () => ['deleteTask'] as const;
+
+export const getDeleteTaskMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTask>>, TError,DeleteTaskMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTask>>, TError,DeleteTaskMutationVariables, TContext> => {
+
+const mutationKey = getDeleteTaskMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTask>>, DeleteTaskMutationVariables> = (props) => {
+          const {householdId,taskId} = props ?? {};
+
+          return  deleteTask(householdId,taskId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTaskMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTask>>>
+
+    export type DeleteTaskMutationError = ErrorType<unknown>
+    export type DeleteTaskMutationVariables = {householdId: string;taskId: string}
+
+    export const useDeleteTask = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTask>>, TError,DeleteTaskMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTask>>,
+        TError,
+        DeleteTaskMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteTaskMutationOptions(options));
+    }
+

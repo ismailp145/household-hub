@@ -371,6 +371,7 @@ async function taskResponses(
     id: task.id,
     title: task.title,
     description: task.description,
+    notes: task.notes,
     dueDate: task.dueDate,
     status: task.status,
     projectId: task.projectId,
@@ -701,6 +702,7 @@ router.post(
           projectId: body.data.projectId ?? null,
           title: body.data.title,
           description: body.data.description ?? null,
+          notes: body.data.notes ?? null,
           dueDate: toDateString(body.data.dueDate) ?? null,
           createdByUserId: auth.user.id,
         })
@@ -791,6 +793,7 @@ router.patch(
     const taskChanges = {
       ...(body.data.status ? { status: body.data.status } : {}),
       ...(body.data.title ? { title: body.data.title } : {}),
+      ...(body.data.notes !== undefined ? { notes: body.data.notes } : {}),
       ...(body.data.dueDate !== undefined
         ? { dueDate: toDateString(body.data.dueDate) }
         : {}),
@@ -833,6 +836,42 @@ router.patch(
       await taskResponses(params.data.householdId)
     ).find((task) => task.id === updated.id);
     res.json(UpdateTaskResponse.parse(response));
+  },
+);
+
+router.delete(
+  "/households/:householdId/tasks/:taskId",
+  async (req, res): Promise<void> => {
+    const params = UpdateTaskParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid task ID" });
+      return;
+    }
+    const auth = await requireMember(req, res, params.data.householdId);
+    if (!auth) return;
+    const [existing] = await db
+      .select()
+      .from(tasksTable)
+      .where(
+        and(
+          eq(tasksTable.id, params.data.taskId),
+          eq(tasksTable.householdId, params.data.householdId),
+        ),
+      )
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Task not found" });
+      return;
+    }
+    await db
+      .delete(tasksTable)
+      .where(
+        and(
+          eq(tasksTable.id, params.data.taskId),
+          eq(tasksTable.householdId, params.data.householdId),
+        ),
+      );
+    res.status(204).send();
   },
 );
 

@@ -14,6 +14,8 @@ export interface Task {
   /** @nullable */
   description: string | null;
   /** @nullable */
+  notes: string | null;
+  /** @nullable */
   dueDate: Date | null;
   status: TaskStatus;
   /** @nullable */
