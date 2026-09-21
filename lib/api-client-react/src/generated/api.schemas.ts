@@ -70,6 +70,7 @@ export interface TaskUpdate {
   title?: string;
   /** @nullable */
   dueDate?: string | null;
+  assigneeIds?: string[];
 }
 
 export type HouseholdSummaryRole = typeof HouseholdSummaryRole[keyof typeof HouseholdSummaryRole];
@@ -141,6 +142,25 @@ export interface Task {
   assignees: Member[];
 }
 
+export type ActivityEventType = typeof ActivityEventType[keyof typeof ActivityEventType];
+
+
+export const ActivityEventType = {
+  household_created: 'household_created',
+  member_joined: 'member_joined',
+  task_created: 'task_created',
+  task_assigned: 'task_assigned',
+  task_completed: 'task_completed',
+  task_reopened: 'task_reopened',
+} as const;
+
+export interface ActivityEvent {
+  id: string;
+  type: ActivityEventType;
+  message: string;
+  createdAt: string;
+}
+
 export type HouseholdDashboardRole = typeof HouseholdDashboardRole[keyof typeof HouseholdDashboardRole];
 
 
@@ -156,6 +176,7 @@ export interface HouseholdDashboard {
   members: Member[];
   projects: Project[];
   tasks: Task[];
+  activity: ActivityEvent[];
 }
 
 export interface ProjectDetail {

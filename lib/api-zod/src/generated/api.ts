@@ -98,6 +98,12 @@ export const GetHouseholdDashboardResponse = zod.object({
   "avatarUrl": zod.string().nullish(),
   "role": zod.enum(['owner', 'member'])
 }))
+})),
+  "activity": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "type": zod.enum(['household_created', 'member_joined', 'task_created', 'task_assigned', 'task_completed', 'task_reopened']),
+  "message": zod.string(),
+  "createdAt": zod.coerce.date()
 }))
 })
 
@@ -221,7 +227,8 @@ export const updateTaskBodyTitleMax = 160;
 export const UpdateTaskBody = zod.object({
   "status": zod.enum(['todo', 'in_progress', 'done']).optional(),
   "title": zod.string().min(1).max(updateTaskBodyTitleMax).optional(),
-  "dueDate": zod.coerce.date().nullish()
+  "dueDate": zod.coerce.date().nullish(),
+  "assigneeIds": zod.array(zod.string().uuid()).optional()
 })
 
 export const UpdateTaskResponse = zod.object({
