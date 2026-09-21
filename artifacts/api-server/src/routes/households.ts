@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { getAuth } from "@clerk/express";
+import { clerkClient, getAuth } from "@clerk/express";
 import {
   CreateHouseholdBody,
   CreateHouseholdResponse,
@@ -52,6 +52,31 @@ function claimString(claims: unknown, key: string) {
   return typeof value === "string" ? value : undefined;
 }
 
+async function clerkProfile(
+  clerkUserId: string,
+  fallback: Pick<User, "displayName" | "email" | "avatarUrl">,
+) {
+  const clerkUser = await clerkClient.users.getUser(clerkUserId);
+  const primaryEmail =
+    clerkUser.emailAddresses.find(
+      (address) => address.id === clerkUser.primaryEmailAddressId,
+    ) ?? clerkUser.emailAddresses[0];
+  const fullName = [clerkUser.firstName, clerkUser.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return {
+    displayName:
+      fullName ||
+      clerkUser.username ||
+      primaryEmail?.emailAddress.split("@")[0] ||
+      fallback.displayName,
+    email: primaryEmail?.emailAddress ?? fallback.email,
+    avatarUrl: clerkUser.imageUrl || fallback.avatarUrl,
+  };
+}
+
 async function requireUser(req: Request, res: Response): Promise<User | null> {
   const auth = getAuth(req);
   const clerkUserId = (auth.sessionClaims?.userId ?? auth.userId) as
@@ -68,20 +93,54 @@ async function requireUser(req: Request, res: Response): Promise<User | null> {
     .from(usersTable)
     .where(eq(usersTable.clerkUserId, clerkUserId))
     .limit(1);
-  if (existing) return existing;
 
-  const displayName =
+  let displayName =
     claimString(auth.sessionClaims, "name") ??
     claimString(auth.sessionClaims, "first_name") ??
     "Household member";
-  const email =
+  let email =
     claimString(auth.sessionClaims, "email") ??
     claimString(auth.sessionClaims, "email_address") ??
     `${clerkUserId}@users.household-hub.local`;
+  let avatarUrl =
+    claimString(auth.sessionClaims, "image_url") ??
+    claimString(auth.sessionClaims, "picture") ??
+    null;
+
+  try {
+    const profile = await clerkProfile(clerkUserId, {
+      displayName,
+      email,
+      avatarUrl,
+    });
+    displayName = profile.displayName;
+    email = profile.email;
+    avatarUrl = profile.avatarUrl;
+  } catch {
+    // Keep existing database data if Clerk is temporarily unavailable.
+    if (existing) return existing;
+  }
+
+  if (existing) {
+    if (
+      existing.displayName === displayName &&
+      existing.email === email &&
+      existing.avatarUrl === avatarUrl
+    ) {
+      return existing;
+    }
+
+    const [updated] = await db
+      .update(usersTable)
+      .set({ displayName, email, avatarUrl })
+      .where(eq(usersTable.id, existing.id))
+      .returning();
+    return updated;
+  }
 
   const [created] = await db
     .insert(usersTable)
-    .values({ clerkUserId, displayName, email })
+    .values({ clerkUserId, displayName, email, avatarUrl })
     .onConflictDoNothing({ target: usersTable.clerkUserId })
     .returning();
   if (created) return created;
@@ -214,9 +273,11 @@ async function requireMember(
 }
 
 async function membersForHousehold(householdId: string) {
-  return db
+  const rows = await db
     .select({
       id: householdMembersTable.id,
+      userId: usersTable.id,
+      clerkUserId: usersTable.clerkUserId,
       displayName: usersTable.displayName,
       email: usersTable.email,
       avatarUrl: usersTable.avatarUrl,
@@ -226,6 +287,41 @@ async function membersForHousehold(householdId: string) {
     .innerJoin(usersTable, eq(householdMembersTable.userId, usersTable.id))
     .where(eq(householdMembersTable.householdId, householdId))
     .orderBy(asc(usersTable.displayName));
+
+  const members = await Promise.all(
+    rows.map(async (row) => {
+      let profile = {
+        displayName: row.displayName,
+        email: row.email,
+        avatarUrl: row.avatarUrl,
+      };
+
+      if (
+        row.displayName === "Household member" ||
+        row.email.endsWith("@users.household-hub.local")
+      ) {
+        try {
+          profile = await clerkProfile(row.clerkUserId, profile);
+          await db
+            .update(usersTable)
+            .set(profile)
+            .where(eq(usersTable.id, row.userId));
+        } catch {
+          // Return the existing profile if Clerk is temporarily unavailable.
+        }
+      }
+
+      return {
+        id: row.id,
+        ...profile,
+        role: row.role,
+      };
+    }),
+  );
+
+  return members.sort((a, b) =>
+    a.displayName.localeCompare(b.displayName),
+  );
 }
 
 async function taskResponses(
