@@ -1,0 +1,1 @@
+- [Generated contract declarations](generated-contract-declarations.md) — force the TypeScript project build after OpenAPI changes when source and dist types diverge.
