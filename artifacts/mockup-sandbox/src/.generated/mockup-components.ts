@@ -2,7 +2,7 @@
 type ModuleMap = Record<string, () => Promise<Record<string, unknown>>>;
 export const modules: ModuleMap = {
   "./components/mockups/templates/BrutalistOutdoorRebrandScreen-lw349a/App.tsx": () => import("../components/mockups/templates/BrutalistOutdoorRebrandScreen-lw349a/App.tsx"),
-  "./components/mockups/templates/DarkAIRenderMusicPlayer-8WzoCV/App.tsx": () => import("../components/mockups/templates/DarkAIRenderMusicPlayer-8WzoCV/App.tsx"),
   "./components/mockups/templates/DarkAIRenderMusicPlayer-PA27Wd/App.tsx": () => import("../components/mockups/templates/DarkAIRenderMusicPlayer-PA27Wd/App.tsx"),
-  "./components/mockups/templates/DarkAIRenderMusicPlayer-i1Xoj9/App.tsx": () => import("../components/mockups/templates/DarkAIRenderMusicPlayer-i1Xoj9/App.tsx")
+  "./components/mockups/templates/DarkAIRenderMusicPlayer-i1Xoj9/App.tsx": () => import("../components/mockups/templates/DarkAIRenderMusicPlayer-i1Xoj9/App.tsx"),
+  "./components/mockups/templates/DarkAIRenderMusicPlayer-8WzoCV/App.tsx": () => import("../components/mockups/templates/DarkAIRenderMusicPlayer-8WzoCV/App.tsx")
 };
