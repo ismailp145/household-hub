@@ -14,6 +14,8 @@ export interface TaskUpdate {
      * @maxLength 160
      */
   title?: string;
+  /** @maxLength 10000 */
+  notes?: string;
   /** @nullable */
   dueDate?: Date | null;
   assigneeIds?: string[];

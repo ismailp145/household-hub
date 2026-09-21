@@ -47,6 +47,8 @@ export interface TaskInput {
   title: string;
   /** @maxLength 1000 */
   description?: string;
+  /** @maxLength 10000 */
+  notes?: string;
   dueDate?: string;
   projectId?: string;
   assigneeIds?: string[];
@@ -68,6 +70,8 @@ export interface TaskUpdate {
      * @maxLength 160
      */
   title?: string;
+  /** @maxLength 10000 */
+  notes?: string;
   /** @nullable */
   dueDate?: string | null;
   assigneeIds?: string[];
@@ -134,6 +138,8 @@ export interface Task {
   title: string;
   /** @nullable */
   description: string | null;
+  /** @nullable */
+  notes: string | null;
   /** @nullable */
   dueDate: string | null;
   status: TaskStatus;

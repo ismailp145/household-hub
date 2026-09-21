@@ -113,6 +113,7 @@ export const tasksTable = pgTable(
     }),
     title: text("title").notNull(),
     description: text("description"),
+    notes: text("notes"),
     dueDate: date("due_date", { mode: "string" }),
     status: taskStatusEnum("status").default("todo").notNull(),
     createdByUserId: uuid("created_by_user_id")

@@ -88,6 +88,7 @@ export const GetHouseholdDashboardResponse = zod.object({
   "id": zod.string().uuid(),
   "title": zod.string(),
   "description": zod.string().nullable(),
+  "notes": zod.string().nullable(),
   "dueDate": zod.coerce.date().nullable(),
   "status": zod.enum(['todo', 'in_progress', 'done']),
   "projectId": zod.string().uuid().nullable(),
@@ -166,6 +167,7 @@ export const GetProjectResponse = zod.object({
   "id": zod.string().uuid(),
   "title": zod.string(),
   "description": zod.string().nullable(),
+  "notes": zod.string().nullable(),
   "dueDate": zod.coerce.date().nullable(),
   "status": zod.enum(['todo', 'in_progress', 'done']),
   "projectId": zod.string().uuid().nullable(),
@@ -188,11 +190,14 @@ export const createTaskBodyTitleMax = 160;
 
 export const createTaskBodyDescriptionMax = 1000;
 
+export const createTaskBodyNotesMax = 10000;
+
 
 
 export const CreateTaskBody = zod.object({
   "title": zod.string().min(1).max(createTaskBodyTitleMax),
   "description": zod.string().max(createTaskBodyDescriptionMax).optional(),
+  "notes": zod.string().max(createTaskBodyNotesMax).optional(),
   "dueDate": zod.coerce.date().optional(),
   "projectId": zod.string().uuid().optional(),
   "assigneeIds": zod.array(zod.string().uuid()).optional()
@@ -202,6 +207,7 @@ export const CreateTaskResponse = zod.object({
   "id": zod.string().uuid(),
   "title": zod.string(),
   "description": zod.string().nullable(),
+  "notes": zod.string().nullable(),
   "dueDate": zod.coerce.date().nullable(),
   "status": zod.enum(['todo', 'in_progress', 'done']),
   "projectId": zod.string().uuid().nullable(),
@@ -222,11 +228,14 @@ export const UpdateTaskParams = zod.object({
 
 export const updateTaskBodyTitleMax = 160;
 
+export const updateTaskBodyNotesMax = 10000;
+
 
 
 export const UpdateTaskBody = zod.object({
   "status": zod.enum(['todo', 'in_progress', 'done']).optional(),
   "title": zod.string().min(1).max(updateTaskBodyTitleMax).optional(),
+  "notes": zod.string().max(updateTaskBodyNotesMax).optional(),
   "dueDate": zod.coerce.date().nullish(),
   "assigneeIds": zod.array(zod.string().uuid()).optional()
 })
@@ -235,6 +244,7 @@ export const UpdateTaskResponse = zod.object({
   "id": zod.string().uuid(),
   "title": zod.string(),
   "description": zod.string().nullable(),
+  "notes": zod.string().nullable(),
   "dueDate": zod.coerce.date().nullable(),
   "status": zod.enum(['todo', 'in_progress', 'done']),
   "projectId": zod.string().uuid().nullable(),
@@ -246,5 +256,13 @@ export const UpdateTaskResponse = zod.object({
   "role": zod.enum(['owner', 'member'])
 }))
 })
+
+
+export const DeleteTaskParams = zod.object({
+  "householdId": zod.coerce.string().uuid(),
+  "taskId": zod.coerce.string().uuid()
+})
+
+export const DeleteTaskResponse = zod.void()
 
 

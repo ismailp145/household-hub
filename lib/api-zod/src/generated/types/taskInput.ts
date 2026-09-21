@@ -14,6 +14,8 @@ export interface TaskInput {
   title: string;
   /** @maxLength 1000 */
   description?: string;
+  /** @maxLength 10000 */
+  notes?: string;
   dueDate?: Date;
   projectId?: string;
   assigneeIds?: string[];

@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { 
   useCreateTask, 
   useUpdateTask,
+  useDeleteTask,
   getGetHouseholdDashboardQueryKey,
   getGetProjectQueryKey,
   getListHouseholdsQueryKey
@@ -30,10 +31,18 @@ export function useTasks(householdId: string, projectId?: string) {
     }
   });
 
+  const deleteMutation = useDeleteTask({
+    mutation: {
+      onSuccess: invalidate
+    }
+  });
+
   return {
     createTask: createMutation.mutate,
     isCreating: createMutation.isPending,
     updateTask: updateMutation.mutate,
     isUpdating: updateMutation.isPending,
+    deleteTask: deleteMutation.mutate,
+    isDeleting: deleteMutation.isPending,
   };
 }

@@ -10,21 +10,26 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
-import { Plus, LayoutDashboard, CheckCircle2, CalendarDays, ArrowLeft } from "lucide-react";
+import { Plus, LayoutDashboard, CheckCircle2, CalendarDays, ArrowLeft, Trash2, FileText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { AssigneeSelect } from "@/components/AssigneeSelect";
+import type { Task } from "@workspace/api-client-react";
 
 export default function ProjectDetail() {
   const { householdId, projectId } = useParams<{ householdId: string, projectId: string }>();
   const { data: detail, isLoading, error } = useProjectDetail(householdId, projectId);
-  const { createTask, updateTask, isCreating: isCreatingTask, isUpdating: isUpdatingTask } = useTasks(householdId, projectId);
+  const { createTask, updateTask, deleteTask, isCreating: isCreatingTask, isUpdating: isUpdatingTask, isDeleting: isDeletingTask } = useTasks(householdId, projectId);
   const { toast } = useToast();
 
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDesc, setTaskDesc] = useState("");
   const [taskAssigneeId, setTaskAssigneeId] = useState("unassigned");
+
+  const [taskDetailOpen, setTaskDetailOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [editingNotes, setEditingNotes] = useState("");
 
   const handleCreateTask = () => {
     if (!taskTitle.trim()) return;
@@ -52,6 +57,43 @@ export default function ProjectDetail() {
     updateTask({ householdId, taskId, data: { status: newStatus } }, {
       onError: () => {
         toast({ title: "Failed to update task", variant: "destructive" });
+      }
+    });
+  };
+
+  const handleOpenTaskDetail = (task: Task) => {
+    setSelectedTask(task);
+    setEditingNotes(task.notes || "");
+    setTaskDetailOpen(true);
+  };
+
+  const handleSaveNotes = () => {
+    if (!selectedTask) return;
+    updateTask({ 
+      householdId, 
+      taskId: selectedTask.id, 
+      data: { notes: editingNotes } 
+    }, {
+      onSuccess: () => {
+        toast({ title: "Notes saved" });
+        setTaskDetailOpen(false);
+      },
+      onError: () => {
+        toast({ title: "Failed to save notes", variant: "destructive" });
+      }
+    });
+  };
+
+  const handleDeleteTask = () => {
+    if (!selectedTask) return;
+    if (!confirm(`Delete "${selectedTask.title}"?`)) return;
+    deleteTask({ householdId, taskId: selectedTask.id }, {
+      onSuccess: () => {
+        toast({ title: "Task deleted" });
+        setTaskDetailOpen(false);
+      },
+      onError: () => {
+        toast({ title: "Failed to delete task", variant: "destructive" });
       }
     });
   };
@@ -188,9 +230,19 @@ export default function ProjectDetail() {
                       className="mt-1 w-5 h-5 rounded-full border-2 data-[state=checked]:bg-[#D4A373] data-[state=checked]:border-[#D4A373]"
                       disabled={isUpdatingTask}
                     />
-                    <div className="flex-1 min-w-0">
-                      <div className={`font-medium ${isDone ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                        {task.title}
+                    <div 
+                      className="flex-1 min-w-0 cursor-pointer" 
+                      onClick={() => handleOpenTaskDetail(task)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`font-medium ${isDone ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                          {task.title}
+                        </div>
+                        {task.notes && (
+                          <span title="Has notes">
+                            <FileText className="w-4 h-4 text-[#D4A373]" />
+                          </span>
+                        )}
                       </div>
                       {task.description && (
                         <div className="text-sm text-muted-foreground mt-1">
@@ -232,6 +284,67 @@ export default function ProjectDetail() {
           )}
         </div>
       </div>
+
+      <Dialog open={taskDetailOpen} onOpenChange={setTaskDetailOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedTask?.title}</DialogTitle>
+          </DialogHeader>
+          {selectedTask && (
+            <div className="space-y-6 py-4">
+              {selectedTask.description && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Description</Label>
+                  <p className="mt-1 text-sm">{selectedTask.description}</p>
+                </div>
+              )}
+              
+              <div className="space-y-2">
+                <Label htmlFor="task-notes">Notes</Label>
+                <Textarea 
+                  id="task-notes"
+                  placeholder="Add notes, links, or any details about this task..."
+                  value={editingNotes}
+                  onChange={(e) => setEditingNotes(e.target.value)}
+                  rows={10}
+                  className="resize-none"
+                />
+                <p className="text-xs text-muted-foreground">
+                  You can add links, photos, tasks, or any other details here.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 pt-4 border-t">
+                <Button 
+                  variant="destructive" 
+                  onClick={handleDeleteTask}
+                  disabled={isUpdatingTask || isDeletingTask}
+                  className="gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete Task
+                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setTaskDetailOpen(false)}
+                    disabled={isUpdatingTask || isDeletingTask}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleSaveNotes}
+                    disabled={isUpdatingTask || isDeletingTask}
+                    className="bg-[#D4A373] hover:bg-[#D4A373]/90 text-white"
+                  >
+                    {isUpdatingTask ? "Saving..." : "Save Notes"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

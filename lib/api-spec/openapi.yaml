@@ -175,6 +175,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Task"
+    delete:
+      operationId: deleteTask
+      tags: [household]
+      responses:
+        "204":
+          description: Task deleted
 components:
   parameters:
     HouseholdId:
@@ -235,6 +241,9 @@ components:
         description:
           type: string
           maxLength: 1000
+        notes:
+          type: string
+          maxLength: 10000
         dueDate:
           type: string
           format: date
@@ -256,6 +265,9 @@ components:
           type: string
           minLength: 1
           maxLength: 160
+        notes:
+          type: string
+          maxLength: 10000
         dueDate:
           type: ["string", "null"]
           format: date
@@ -321,7 +333,7 @@ components:
           type: integer
     Task:
       type: object
-      required: [id, title, description, dueDate, status, projectId, assignees]
+      required: [id, title, description, notes, dueDate, status, projectId, assignees]
       properties:
         id:
           type: string
@@ -329,6 +341,8 @@ components:
         title:
           type: string
         description:
+          type: ["string", "null"]
+        notes:
           type: ["string", "null"]
         dueDate:
           type: ["string", "null"]
