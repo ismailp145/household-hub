@@ -9,6 +9,10 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface InviteCode {
+  code: string;
+}
+
 export interface HouseholdInput {
   /**
      * @minLength 2

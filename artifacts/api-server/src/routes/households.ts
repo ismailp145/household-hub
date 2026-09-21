@@ -16,6 +16,8 @@ import {
   JoinHouseholdBody,
   JoinHouseholdResponse,
   ListHouseholdsResponse,
+  RegenerateHouseholdJoinCodeParams,
+  RegenerateHouseholdJoinCodeResponse,
   UpdateTaskBody,
   UpdateTaskParams,
   UpdateTaskResponse,
@@ -350,6 +352,29 @@ router.get(
         tasks,
       }),
     );
+  },
+);
+
+router.post(
+  "/households/:householdId/join-code",
+  async (req, res): Promise<void> => {
+    const params = RegenerateHouseholdJoinCodeParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const auth = await requireMember(req, res, params.data.householdId);
+    if (!auth) return;
+    if (auth.membership.role !== "owner") {
+      res.status(403).json({ error: "Only household owners can create invite codes" });
+      return;
+    }
+    const code = createJoinCode();
+    await db
+      .update(householdsTable)
+      .set({ joinCodeHash: hashCode(code) })
+      .where(eq(householdsTable.id, params.data.householdId));
+    res.json(RegenerateHouseholdJoinCodeResponse.parse({ code }));
   },
 );
 

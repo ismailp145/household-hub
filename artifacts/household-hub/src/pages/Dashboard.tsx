@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Home, Users, Plus, Key } from "lucide-react";
+import { Home, Users, Plus, Key, Copy, Check } from "lucide-react";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +17,8 @@ export default function Dashboard() {
   const [joinOpen, setJoinOpen] = useState(false);
   const [newHouseholdName, setNewHouseholdName] = useState("");
   const [joinCode, setJoinCode] = useState("");
+  const [createdInvite, setCreatedInvite] = useState<{ name: string; code: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const { toast } = useToast();
 
   const handleCreate = () => {
@@ -25,10 +27,7 @@ export default function Dashboard() {
       onSuccess: (data) => {
         setCreateOpen(false);
         setNewHouseholdName("");
-        toast({
-          title: "Household created",
-          description: `You've successfully created ${data.household.name}. The invite code is ${data.joinCode}.`
-        });
+        setCreatedInvite({ name: data.household.name, code: data.joinCode });
       },
       onError: (err) => {
         toast({
@@ -38,6 +37,13 @@ export default function Dashboard() {
         });
       }
     });
+  };
+
+  const copyInviteCode = async () => {
+    if (!createdInvite) return;
+    await navigator.clipboard.writeText(createdInvite.code);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
   };
 
   const handleJoin = () => {
@@ -169,6 +175,32 @@ export default function Dashboard() {
           ))
         )}
       </div>
+
+      <Dialog open={Boolean(createdInvite)} onOpenChange={(open) => !open && setCreatedInvite(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Share your household invite</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-3">
+            <p className="text-sm text-muted-foreground">
+              {createdInvite?.name} is ready. Send this code to the people you want to invite.
+            </p>
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5 text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Invite code</p>
+              <p className="mt-2 font-mono text-3xl font-bold tracking-[0.2em] text-foreground">
+                {createdInvite?.code}
+              </p>
+            </div>
+            <Button onClick={copyInviteCode} className="w-full">
+              {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+              {copied ? "Copied" : "Copy invite code"}
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              You can generate a new code later from the household page.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

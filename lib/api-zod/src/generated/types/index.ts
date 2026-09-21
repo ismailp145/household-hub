@@ -13,6 +13,7 @@ export * from './householdDashboardRole';
 export * from './householdInput';
 export * from './householdSummary';
 export * from './householdSummaryRole';
+export * from './inviteCode';
 export * from './joinHouseholdInput';
 export * from './member';
 export * from './memberRole';

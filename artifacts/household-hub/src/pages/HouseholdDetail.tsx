@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useGetHouseholdDashboard } from "@workspace/api-client-react";
+import { useGetHouseholdDashboard, useRegenerateHouseholdJoinCode } from "@workspace/api-client-react";
 import { useTasks } from "@/hooks/use-tasks";
 import { useProjects } from "@/hooks/use-projects";
 import { Link, useParams } from "wouter";
@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
-import { Plus, LayoutDashboard, CheckCircle2, CalendarDays, Users } from "lucide-react";
+import { Plus, LayoutDashboard, CheckCircle2, CalendarDays, Users, Key, Copy, Check } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
@@ -26,6 +26,10 @@ export default function HouseholdDetail() {
 
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const regenerateCode = useRegenerateHouseholdJoinCode();
 
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDesc, setTaskDesc] = useState("");
@@ -66,6 +70,20 @@ export default function HouseholdDetail() {
     });
   };
 
+  const generateInviteCode = () => {
+    regenerateCode.mutate({ householdId }, {
+      onSuccess: (data) => setInviteCode(data.code),
+      onError: () => toast({ title: "Could not create invite code", variant: "destructive" }),
+    });
+  };
+
+  const copyInviteCode = async () => {
+    if (!inviteCode) return;
+    await navigator.clipboard.writeText(inviteCode);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -102,8 +120,9 @@ export default function HouseholdDetail() {
 
   return (
     <AppLayout>
-      <div className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">{dashboard.name}</h1>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">{dashboard.name}</h1>
         <div className="flex items-center gap-3 mt-3 text-sm text-muted-foreground">
           <span className="capitalize px-2 py-1 bg-secondary/10 text-secondary rounded-md font-medium">{dashboard.role}</span>
           <span>•</span>
@@ -111,8 +130,51 @@ export default function HouseholdDetail() {
             <Users className="w-4 h-4" />
             {dashboard.members.length} members
           </div>
+          </div>
         </div>
+        {dashboard.role === "owner" && (
+          <Button variant="outline" onClick={() => setInviteOpen(true)}>
+            <Key className="mr-2 h-4 w-4" /> Invite members
+          </Button>
+        )}
       </div>
+
+      <Dialog open={inviteOpen} onOpenChange={(open) => {
+        setInviteOpen(open);
+        if (!open) {
+          setInviteCode(null);
+          setCopied(false);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invite members</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-3">
+            {!inviteCode ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Generate a new code to share. Creating a new code replaces the previous one.
+                </p>
+                <Button className="w-full" onClick={generateInviteCode} disabled={regenerateCode.isPending}>
+                  {regenerateCode.isPending ? "Generating..." : "Generate invite code"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5 text-center">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Invite code</p>
+                  <p className="mt-2 font-mono text-3xl font-bold tracking-[0.2em]">{inviteCode}</p>
+                </div>
+                <Button className="w-full" onClick={copyInviteCode}>
+                  {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                  {copied ? "Copied" : "Copy invite code"}
+                </Button>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content: Tasks */}

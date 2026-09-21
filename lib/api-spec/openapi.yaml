@@ -80,6 +80,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HouseholdDashboard"
+  /households/{householdId}/join-code:
+    parameters:
+      - $ref: "#/components/parameters/HouseholdId"
+    post:
+      operationId: regenerateHouseholdJoinCode
+      tags: [household]
+      responses:
+        "200":
+          description: A newly generated household join code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteCode"
   /households/{householdId}/projects:
     parameters:
       - $ref: "#/components/parameters/HouseholdId"
@@ -177,6 +190,12 @@ components:
       required: [status]
       properties:
         status:
+          type: string
+    InviteCode:
+      type: object
+      required: [code]
+      properties:
+        code:
           type: string
     HouseholdInput:
       type: object

@@ -102,6 +102,15 @@ export const GetHouseholdDashboardResponse = zod.object({
 })
 
 
+export const RegenerateHouseholdJoinCodeParams = zod.object({
+  "householdId": zod.coerce.string().uuid()
+})
+
+export const RegenerateHouseholdJoinCodeResponse = zod.object({
+  "code": zod.string()
+})
+
+
 export const CreateProjectParams = zod.object({
   "householdId": zod.coerce.string().uuid()
 })

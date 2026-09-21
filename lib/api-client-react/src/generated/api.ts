@@ -25,6 +25,7 @@ import type {
   HouseholdDashboard,
   HouseholdInput,
   HouseholdSummary,
+  InviteCode,
   JoinHouseholdInput,
   Project,
   ProjectDetail,
@@ -437,6 +438,74 @@ export function useGetHouseholdDashboard<TData = Awaited<ReturnType<typeof getHo
 
 
 
+
+export const getRegenerateHouseholdJoinCodeUrl = (householdId: string,) => {
+
+
+
+
+  return `/api/households/${householdId}/join-code`
+}
+
+export const regenerateHouseholdJoinCode = async (householdId: string, options?: Parameters<typeof customFetch>[1]): Promise<InviteCode> => {
+
+  return customFetch<InviteCode>(getRegenerateHouseholdJoinCodeUrl(householdId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRegenerateHouseholdJoinCodeMutationKey = () => ['regenerateHouseholdJoinCode'] as const;
+
+export const getRegenerateHouseholdJoinCodeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof regenerateHouseholdJoinCode>>, TError,RegenerateHouseholdJoinCodeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof regenerateHouseholdJoinCode>>, TError,RegenerateHouseholdJoinCodeMutationVariables, TContext> => {
+
+const mutationKey = getRegenerateHouseholdJoinCodeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof regenerateHouseholdJoinCode>>, RegenerateHouseholdJoinCodeMutationVariables> = (props) => {
+          const {householdId} = props ?? {};
+
+          return  regenerateHouseholdJoinCode(householdId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegenerateHouseholdJoinCodeMutationResult = NonNullable<Awaited<ReturnType<typeof regenerateHouseholdJoinCode>>>
+
+    export type RegenerateHouseholdJoinCodeMutationError = ErrorType<unknown>
+    export type RegenerateHouseholdJoinCodeMutationVariables = {householdId: string}
+
+    export const useRegenerateHouseholdJoinCode = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof regenerateHouseholdJoinCode>>, TError,RegenerateHouseholdJoinCodeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof regenerateHouseholdJoinCode>>,
+        TError,
+        RegenerateHouseholdJoinCodeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRegenerateHouseholdJoinCodeMutationOptions(options));
+    }
 
 export const getCreateProjectUrl = (householdId: string,) => {
 
