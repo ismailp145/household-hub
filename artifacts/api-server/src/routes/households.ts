@@ -31,6 +31,7 @@ import {
   tasksTable,
   usersTable,
   type User,
+  activityEventsTable,
 } from "@workspace/db";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
@@ -96,6 +97,96 @@ async function requireUser(req: Request, res: Response): Promise<User | null> {
 function toDateString(value: Date | string | null | undefined) {
   if (value == null || typeof value === "string") return value;
   return value.toISOString().slice(0, 10);
+}
+
+function formatNameList(names: string[]) {
+  if (names.length <= 1) return names[0] ?? "";
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
+async function recordActivity(values: {
+  householdId: string;
+  actorUserId: string | null;
+  type:
+    | "household_created"
+    | "member_joined"
+    | "task_created"
+    | "task_assigned"
+    | "task_completed"
+    | "task_reopened";
+  message: string;
+  taskId?: string | null;
+}) {
+  await db.insert(activityEventsTable).values(values);
+}
+
+async function activityResponses(householdId: string) {
+  const rows = await db
+    .select({
+      id: activityEventsTable.id,
+      type: activityEventsTable.type,
+      message: activityEventsTable.message,
+      createdAt: activityEventsTable.createdAt,
+    })
+    .from(activityEventsTable)
+    .where(eq(activityEventsTable.householdId, householdId))
+    .orderBy(desc(activityEventsTable.createdAt))
+    .limit(40);
+  return rows;
+}
+
+async function memberNamesByIds(householdId: string, memberIds: string[]) {
+  if (!memberIds.length) return [];
+  const rows = await db
+    .select({
+      id: householdMembersTable.id,
+      displayName: usersTable.displayName,
+    })
+    .from(householdMembersTable)
+    .innerJoin(usersTable, eq(householdMembersTable.userId, usersTable.id))
+    .where(
+      and(
+        eq(householdMembersTable.householdId, householdId),
+        inArray(householdMembersTable.id, memberIds),
+      ),
+    );
+  return rows.map((row) => row.displayName);
+}
+
+async function validateAssignees(
+  res: Response,
+  householdId: string,
+  assigneeIds: string[],
+) {
+  if (!assigneeIds.length) return true;
+  const valid = await db
+    .select({ id: householdMembersTable.id })
+    .from(householdMembersTable)
+    .where(
+      and(
+        eq(householdMembersTable.householdId, householdId),
+        inArray(householdMembersTable.id, assigneeIds),
+      ),
+    );
+  if (valid.length !== new Set(assigneeIds).size) {
+    res.status(400).json({ error: "Invalid household assignee" });
+    return false;
+  }
+  return true;
+}
+
+async function replaceAssignees(taskId: string, assigneeIds: string[]) {
+  await db
+    .delete(taskAssigneesTable)
+    .where(eq(taskAssigneesTable.taskId, taskId));
+  if (!assigneeIds.length) return;
+  await db.insert(taskAssigneesTable).values(
+    [...new Set(assigneeIds)].map((householdMemberId) => ({
+      taskId,
+      householdMemberId,
+    })),
+  );
 }
 
 async function requireMember(
@@ -263,6 +354,12 @@ router.post("/households", async (req, res): Promise<void> => {
     });
     return created;
   });
+  await recordActivity({
+    householdId: household.id,
+    actorUserId: user.id,
+    type: "household_created",
+    message: `${user.displayName} created ${household.name}`,
+  });
   res.status(201).json(
     CreateHouseholdResponse.parse({
       household: {
@@ -294,10 +391,19 @@ router.post("/households/join", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Invalid join code" });
     return;
   }
-  await db
+  const [joined] = await db
     .insert(householdMembersTable)
     .values({ householdId: household.id, userId: user.id, role: "member" })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning();
+  if (joined) {
+    await recordActivity({
+      householdId: household.id,
+      actorUserId: user.id,
+      type: "member_joined",
+      message: `${user.displayName} joined ${household.name}`,
+    });
+  }
   const [memberCount] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(householdMembersTable)
@@ -337,10 +443,11 @@ router.get(
       .from(householdsTable)
       .where(eq(householdsTable.id, params.data.householdId))
       .limit(1);
-    const [members, projects, tasks] = await Promise.all([
+    const [members, projects, tasks, activity] = await Promise.all([
       membersForHousehold(params.data.householdId),
       projectResponses(params.data.householdId),
       taskResponses(params.data.householdId),
+      activityResponses(params.data.householdId),
     ]);
     res.json(
       GetHouseholdDashboardResponse.parse({
@@ -350,6 +457,7 @@ router.get(
         members,
         projects,
         tasks,
+        activity,
       }),
     );
   },
@@ -482,20 +590,8 @@ router.post(
       }
     }
     const assigneeIds = body.data.assigneeIds ?? [];
-    if (assigneeIds.length) {
-      const valid = await db
-        .select({ id: householdMembersTable.id })
-        .from(householdMembersTable)
-        .where(
-          and(
-            eq(householdMembersTable.householdId, params.data.householdId),
-            inArray(householdMembersTable.id, assigneeIds),
-          ),
-        );
-      if (valid.length !== new Set(assigneeIds).size) {
-        res.status(400).json({ error: "Invalid household assignee" });
-        return;
-      }
+    if (!(await validateAssignees(res, params.data.householdId, assigneeIds))) {
+      return;
     }
     const task = await db.transaction(async (tx) => {
       const [created] = await tx
@@ -519,6 +615,23 @@ router.post(
       }
       return created;
     });
+    await recordActivity({
+      householdId: params.data.householdId,
+      actorUserId: auth.user.id,
+      type: "task_created",
+      taskId: task.id,
+      message: `${auth.user.displayName} added “${task.title}”`,
+    });
+    if (assigneeIds.length) {
+      const names = await memberNamesByIds(params.data.householdId, assigneeIds);
+      await recordActivity({
+        householdId: params.data.householdId,
+        actorUserId: auth.user.id,
+        type: "task_assigned",
+        taskId: task.id,
+        message: `${auth.user.displayName} assigned “${task.title}” to ${formatNameList(names)}`,
+      });
+    }
     const responses = await taskResponses(params.data.householdId);
     const createdResponse = responses.find((item) => item.id === task.id);
     res.status(201).json(CreateTaskResponse.parse(createdResponse));
@@ -536,6 +649,45 @@ router.patch(
     }
     const auth = await requireMember(req, res, params.data.householdId);
     if (!auth) return;
+    const [existing] = await db
+      .select()
+      .from(tasksTable)
+      .where(
+        and(
+          eq(tasksTable.id, params.data.taskId),
+          eq(tasksTable.householdId, params.data.householdId),
+        ),
+      )
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Task not found" });
+      return;
+    }
+    if (body.data.assigneeIds) {
+      if (
+        !(await validateAssignees(
+          res,
+          params.data.householdId,
+          body.data.assigneeIds,
+        ))
+      ) {
+        return;
+      }
+      await replaceAssignees(params.data.taskId, body.data.assigneeIds);
+      if (body.data.assigneeIds.length) {
+        const names = await memberNamesByIds(
+          params.data.householdId,
+          body.data.assigneeIds,
+        );
+        await recordActivity({
+          householdId: params.data.householdId,
+          actorUserId: auth.user.id,
+          type: "task_assigned",
+          taskId: existing.id,
+          message: `${auth.user.displayName} assigned “${existing.title}” to ${formatNameList(names)}`,
+        });
+      }
+    }
     const [updated] = await db
       .update(tasksTable)
       .set({
@@ -555,6 +707,25 @@ router.patch(
     if (!updated) {
       res.status(404).json({ error: "Task not found" });
       return;
+    }
+    if (body.data.status && body.data.status !== existing.status) {
+      if (body.data.status === "done") {
+        await recordActivity({
+          householdId: params.data.householdId,
+          actorUserId: auth.user.id,
+          type: "task_completed",
+          taskId: updated.id,
+          message: `${auth.user.displayName} completed “${updated.title}”`,
+        });
+      } else if (existing.status === "done") {
+        await recordActivity({
+          householdId: params.data.householdId,
+          actorUserId: auth.user.id,
+          type: "task_reopened",
+          taskId: updated.id,
+          message: `${auth.user.displayName} reopened “${updated.title}”`,
+        });
+      }
     }
     const response = (
       await taskResponses(params.data.householdId)

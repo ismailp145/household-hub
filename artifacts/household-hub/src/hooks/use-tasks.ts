@@ -3,31 +3,30 @@ import {
   useCreateTask, 
   useUpdateTask,
   getGetHouseholdDashboardQueryKey,
-  getGetProjectQueryKey
+  getGetProjectQueryKey,
+  getListHouseholdsQueryKey
 } from "@workspace/api-client-react";
 
 export function useTasks(householdId: string, projectId?: string) {
   const queryClient = useQueryClient();
 
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: getGetHouseholdDashboardQueryKey(householdId) });
+    queryClient.invalidateQueries({ queryKey: getListHouseholdsQueryKey() });
+    if (projectId) {
+      queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(householdId, projectId) });
+    }
+  };
+
   const createMutation = useCreateTask({
     mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetHouseholdDashboardQueryKey(householdId) });
-        if (projectId) {
-          queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(householdId, projectId) });
-        }
-      }
+      onSuccess: invalidate
     }
   });
 
   const updateMutation = useUpdateTask({
     mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetHouseholdDashboardQueryKey(householdId) });
-        if (projectId) {
-          queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(householdId, projectId) });
-        }
-      }
+      onSuccess: invalidate
     }
   });
 

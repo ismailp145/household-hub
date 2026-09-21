@@ -22,6 +22,14 @@ export const inviteStatusEnum = pgEnum("invite_status", [
   "accepted",
   "expired",
 ]);
+export const activityEventTypeEnum = pgEnum("activity_event_type", [
+  "household_created",
+  "member_joined",
+  "task_created",
+  "task_assigned",
+  "task_completed",
+  "task_reopened",
+]);
 
 export const usersTable = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -138,6 +146,26 @@ export const taskAssigneesTable = pgTable(
   ],
 );
 
+export const activityEventsTable = pgTable(
+  "activity_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    actorUserId: uuid("actor_user_id").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
+    type: activityEventTypeEnum("type").notNull(),
+    message: text("message").notNull(),
+    taskId: uuid("task_id").references(() => tasksTable.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("activity_events_household_idx").on(table.householdId)],
+);
+
 export const invitesTable = pgTable(
   "invites",
   {
@@ -167,3 +195,4 @@ export type Household = typeof householdsTable.$inferSelect;
 export type HouseholdMember = typeof householdMembersTable.$inferSelect;
 export type Project = typeof projectsTable.$inferSelect;
 export type Task = typeof tasksTable.$inferSelect;
+export type ActivityEvent = typeof activityEventsTable.$inferSelect;

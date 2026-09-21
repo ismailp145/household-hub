@@ -11,8 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
-import { format } from "date-fns";
-import { Plus, LayoutDashboard, CheckCircle2, CalendarDays, Users, Key, Copy, Check } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
+import { Plus, LayoutDashboard, CheckCircle2, CalendarDays, Users, Key, Copy, Check, History } from "lucide-react";
+import { AssigneeSelect } from "@/components/AssigneeSelect";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
@@ -33,17 +34,26 @@ export default function HouseholdDetail() {
 
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDesc, setTaskDesc] = useState("");
+  const [taskAssigneeId, setTaskAssigneeId] = useState("unassigned");
   
   const [projectName, setProjectName] = useState("");
   const [projectDesc, setProjectDesc] = useState("");
 
   const handleCreateTask = () => {
     if (!taskTitle.trim()) return;
-    createTask({ householdId, data: { title: taskTitle, description: taskDesc || undefined } }, {
+    createTask({
+      householdId,
+      data: {
+        title: taskTitle,
+        description: taskDesc || undefined,
+        assigneeIds: taskAssigneeId === "unassigned" ? undefined : [taskAssigneeId],
+      },
+    }, {
       onSuccess: () => {
         setNewTaskOpen(false);
         setTaskTitle("");
         setTaskDesc("");
+        setTaskAssigneeId("unassigned");
         toast({ title: "Task added" });
       }
     });
@@ -212,6 +222,12 @@ export default function HouseholdDetail() {
                       onChange={e => setTaskDesc(e.target.value)} 
                     />
                   </div>
+                  <AssigneeSelect
+                    label="Assign to"
+                    members={dashboard.members}
+                    value={taskAssigneeId}
+                    onChange={setTaskAssigneeId}
+                  />
                   <Button onClick={handleCreateTask} disabled={isCreatingTask || !taskTitle} className="w-full">
                     {isCreatingTask ? "Adding..." : "Add Task"}
                   </Button>
@@ -265,16 +281,27 @@ export default function HouseholdDetail() {
                           )}
                         </div>
                       </div>
-                      {task.assignees.length > 0 && (
-                        <div className="flex -space-x-2 shrink-0">
-                          {task.assignees.map(a => (
-                            <Avatar key={a.id} className="w-7 h-7 border-2 border-card">
-                              <AvatarImage src={a.avatarUrl || ''} />
-                              <AvatarFallback className="text-[10px] bg-secondary text-secondary-foreground">{a.displayName?.[0]}</AvatarFallback>
-                            </Avatar>
-                          ))}
-                        </div>
-                      )}
+                      <div className="shrink-0 w-40">
+                        <AssigneeSelect
+                          members={dashboard.members}
+                          value={task.assignees[0]?.id ?? "unassigned"}
+                          onChange={(memberId) => {
+                            updateTask({
+                              householdId,
+                              taskId: task.id,
+                              data: {
+                                assigneeIds: memberId === "unassigned" ? [] : [memberId],
+                              },
+                            }, {
+                              onError: () => {
+                                toast({ title: "Failed to assign task", variant: "destructive" });
+                              },
+                            });
+                          }}
+                          disabled={isUpdatingTask}
+                          className="h-8"
+                        />
+                      </div>
                     </div>
                   )
                 })}
@@ -372,6 +399,29 @@ export default function HouseholdDetail() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <History className="w-5 h-5 text-muted-foreground" />
+              Activity
+            </h2>
+            <div className="bg-card rounded-2xl border border-border p-2">
+              {dashboard.activity.length === 0 ? (
+                <p className="text-sm text-muted-foreground p-3 text-center">
+                  Household history will show up here.
+                </p>
+              ) : (
+                dashboard.activity.map((event) => (
+                  <div key={event.id} className="p-3 rounded-xl">
+                    <p className="text-sm text-foreground leading-snug">{event.message}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formatDistanceToNow(new Date(event.createdAt), { addSuffix: true })}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

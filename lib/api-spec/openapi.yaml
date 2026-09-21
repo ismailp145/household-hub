@@ -259,6 +259,11 @@ components:
         dueDate:
           type: ["string", "null"]
           format: date
+        assigneeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
     HouseholdSummary:
       type: object
       required: [id, name, role, memberCount, openTaskCount]
@@ -338,9 +343,30 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Member"
+    ActivityEvent:
+      type: object
+      required: [id, type, message, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - household_created
+            - member_joined
+            - task_created
+            - task_assigned
+            - task_completed
+            - task_reopened
+        message:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
     HouseholdDashboard:
       type: object
-      required: [id, name, role, members, projects, tasks]
+      required: [id, name, role, members, projects, tasks, activity]
       properties:
         id:
           type: string
@@ -362,6 +388,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Task"
+        activity:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityEvent"
     ProjectDetail:
       type: object
       required: [project, members, tasks]

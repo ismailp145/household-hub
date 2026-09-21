@@ -13,7 +13,7 @@ import { format } from "date-fns";
 import { Plus, LayoutDashboard, CheckCircle2, CalendarDays, ArrowLeft } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AssigneeSelect } from "@/components/AssigneeSelect";
 
 export default function ProjectDetail() {
   const { householdId, projectId } = useParams<{ householdId: string, projectId: string }>();
@@ -24,6 +24,7 @@ export default function ProjectDetail() {
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDesc, setTaskDesc] = useState("");
+  const [taskAssigneeId, setTaskAssigneeId] = useState("unassigned");
 
   const handleCreateTask = () => {
     if (!taskTitle.trim()) return;
@@ -32,13 +33,15 @@ export default function ProjectDetail() {
       data: { 
         title: taskTitle, 
         description: taskDesc || undefined, 
-        projectId 
+        projectId,
+        assigneeIds: taskAssigneeId === "unassigned" ? undefined : [taskAssigneeId],
       } 
     }, {
       onSuccess: () => {
         setNewTaskOpen(false);
         setTaskTitle("");
         setTaskDesc("");
+        setTaskAssigneeId("unassigned");
         toast({ title: "Project task added" });
       }
     });
@@ -144,13 +147,19 @@ export default function ProjectDetail() {
                 </div>
                 <div className="space-y-2">
                   <Label>Description (optional)</Label>
-                  <Textarea 
-                    placeholder="Any details..." 
-                    value={taskDesc} 
-                    onChange={e => setTaskDesc(e.target.value)} 
+                    <Textarea 
+                      placeholder="Any details..." 
+                      value={taskDesc} 
+                      onChange={e => setTaskDesc(e.target.value)} 
+                    />
+                  </div>
+                  <AssigneeSelect
+                    label="Assign to"
+                    members={detail.members}
+                    value={taskAssigneeId}
+                    onChange={setTaskAssigneeId}
                   />
-                </div>
-                <Button onClick={handleCreateTask} disabled={isCreatingTask || !taskTitle} className="w-full bg-[#D4A373] hover:bg-[#D4A373]/90 text-white">
+                  <Button onClick={handleCreateTask} disabled={isCreatingTask || !taskTitle} className="w-full bg-[#D4A373] hover:bg-[#D4A373]/90 text-white">
                   {isCreatingTask ? "Adding..." : "Add Task"}
                 </Button>
               </div>
@@ -195,16 +204,27 @@ export default function ProjectDetail() {
                         </div>
                       )}
                     </div>
-                    {task.assignees.length > 0 && (
-                      <div className="flex -space-x-2 shrink-0">
-                        {task.assignees.map(a => (
-                          <Avatar key={a.id} className="w-7 h-7 border-2 border-card">
-                            <AvatarImage src={a.avatarUrl || ''} />
-                            <AvatarFallback className="text-[10px] bg-secondary text-secondary-foreground">{a.displayName?.[0]}</AvatarFallback>
-                          </Avatar>
-                        ))}
-                      </div>
-                    )}
+                    <div className="shrink-0 w-40">
+                      <AssigneeSelect
+                        members={detail.members}
+                        value={task.assignees[0]?.id ?? "unassigned"}
+                        onChange={(memberId) => {
+                          updateTask({
+                            householdId,
+                            taskId: task.id,
+                            data: {
+                              assigneeIds: memberId === "unassigned" ? [] : [memberId],
+                            },
+                          }, {
+                            onError: () => {
+                              toast({ title: "Failed to assign task", variant: "destructive" });
+                            },
+                          });
+                        }}
+                        disabled={isUpdatingTask}
+                        className="h-8"
+                      />
+                    </div>
                   </div>
                 )
               })}
