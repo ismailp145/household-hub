@@ -1,0 +1,10 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/_global-error/page": "/_global-error",
+  "/dashboard/page": "/dashboard",
+  "/households/[householdId]/page": "/households/[householdId]",
+  "/households/[householdId]/projects/[projectId]/page": "/households/[householdId]/projects/[projectId]",
+  "/page": "/",
+  "/sign-in/[[...sign-in]]/page": "/sign-in/[[...sign-in]]",
+  "/sign-up/[[...sign-up]]/page": "/sign-up/[[...sign-up]]"
+}

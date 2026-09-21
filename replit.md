@@ -1,45 +1,43 @@
-# [Project name]
+# Household Hub
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Household Hub is a responsive household coordination app for shared tasks, members, and home projects.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm --filter @workspace/api-server run dev` — run the API server
+- `pnpm --filter @workspace/household-hub run dev` — run the web app
+- `pnpm run typecheck` — full workspace typecheck
+- `pnpm --filter @workspace/api-spec run codegen` — regenerate API clients after OpenAPI changes
+- `pnpm --filter @workspace/db run push` — push development schema changes
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- React + Vite + TypeScript + Tailwind CSS
+- Express API with OpenAPI-generated clients and Zod validators
+- PostgreSQL + Drizzle ORM
+- Replit-managed Clerk authentication
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/household-hub` — responsive web application
+- `artifacts/api-server/src/routes/households.ts` — authenticated household API
+- `lib/api-spec/openapi.yaml` — API contract
+- `lib/db/src/schema/household.ts` — database schema
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Every household read or write checks the signed-in user's membership on the server.
+- Tasks have a `household_id` and optional `project_id`; project tasks remain visible in household-wide task views.
+- Multiple assignees are modeled through `task_assignees`.
+- Clerk owns authentication; the local `users` table stores application profile data keyed by Clerk user ID.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Create or join a household with a join code
+- View household members
+- Create and complete assigned tasks with due dates
+- Create projects and manage their tasks
 
-## User preferences
+## Deferred
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
-
-## Gotchas
-
-_Populate as you build — sharp edges, "always run X before Y" rules._
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+Do not add vendors, contractor comparison, attachments, comments, activity events, notifications, calendar integration, AI features, or payments unless requested.

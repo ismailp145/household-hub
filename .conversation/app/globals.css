@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #fbfaf7;
+  --foreground: #17201d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-3xl border border-black/5 bg-white shadow-card;
+  }
+
+  .button-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-moss px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#244c41] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .button-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-sage/40 disabled:opacity-50;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm outline-none transition placeholder:text-black/35 focus:border-moss focus:ring-2 focus:ring-moss/15;
+  }
+}

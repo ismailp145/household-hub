@@ -1,0 +1,541 @@
+import { createHash, randomBytes } from "node:crypto";
+import { getAuth } from "@clerk/express";
+import {
+  CreateHouseholdBody,
+  CreateHouseholdResponse,
+  CreateProjectBody,
+  CreateProjectParams,
+  CreateProjectResponse,
+  CreateTaskBody,
+  CreateTaskParams,
+  CreateTaskResponse,
+  GetHouseholdDashboardParams,
+  GetHouseholdDashboardResponse,
+  GetProjectParams,
+  GetProjectResponse,
+  JoinHouseholdBody,
+  JoinHouseholdResponse,
+  ListHouseholdsResponse,
+  UpdateTaskBody,
+  UpdateTaskParams,
+  UpdateTaskResponse,
+} from "@workspace/api-zod";
+import {
+  db,
+  householdMembersTable,
+  householdsTable,
+  projectsTable,
+  taskAssigneesTable,
+  tasksTable,
+  usersTable,
+  type User,
+} from "@workspace/db";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { Router, type IRouter, type Request, type Response } from "express";
+
+const router: IRouter = Router();
+
+function hashCode(code: string) {
+  return createHash("sha256").update(code.trim().toUpperCase()).digest("hex");
+}
+
+function createJoinCode() {
+  return randomBytes(4).toString("hex").toUpperCase();
+}
+
+function claimString(claims: unknown, key: string) {
+  if (!claims || typeof claims !== "object") return undefined;
+  const value = (claims as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+async function requireUser(req: Request, res: Response): Promise<User | null> {
+  const auth = getAuth(req);
+  const clerkUserId = (auth.sessionClaims?.userId ?? auth.userId) as
+    | string
+    | null
+    | undefined;
+  if (!clerkUserId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return null;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.clerkUserId, clerkUserId))
+    .limit(1);
+  if (existing) return existing;
+
+  const displayName =
+    claimString(auth.sessionClaims, "name") ??
+    claimString(auth.sessionClaims, "first_name") ??
+    "Household member";
+  const email =
+    claimString(auth.sessionClaims, "email") ??
+    claimString(auth.sessionClaims, "email_address") ??
+    `${clerkUserId}@users.household-hub.local`;
+
+  const [created] = await db
+    .insert(usersTable)
+    .values({ clerkUserId, displayName, email })
+    .onConflictDoNothing({ target: usersTable.clerkUserId })
+    .returning();
+  if (created) return created;
+
+  const [concurrent] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.clerkUserId, clerkUserId))
+    .limit(1);
+  return concurrent;
+}
+
+function toDateString(value: Date | string | null | undefined) {
+  if (value == null || typeof value === "string") return value;
+  return value.toISOString().slice(0, 10);
+}
+
+async function requireMember(
+  req: Request,
+  res: Response,
+  householdId: string,
+) {
+  const user = await requireUser(req, res);
+  if (!user) return null;
+  const [membership] = await db
+    .select()
+    .from(householdMembersTable)
+    .where(
+      and(
+        eq(householdMembersTable.householdId, householdId),
+        eq(householdMembersTable.userId, user.id),
+      ),
+    )
+    .limit(1);
+  if (!membership) {
+    res.status(403).json({ error: "You are not a member of this household" });
+    return null;
+  }
+  return { user, membership };
+}
+
+async function membersForHousehold(householdId: string) {
+  return db
+    .select({
+      id: householdMembersTable.id,
+      displayName: usersTable.displayName,
+      email: usersTable.email,
+      avatarUrl: usersTable.avatarUrl,
+      role: householdMembersTable.role,
+    })
+    .from(householdMembersTable)
+    .innerJoin(usersTable, eq(householdMembersTable.userId, usersTable.id))
+    .where(eq(householdMembersTable.householdId, householdId))
+    .orderBy(asc(usersTable.displayName));
+}
+
+async function taskResponses(
+  householdId: string,
+  projectId?: string,
+) {
+  const taskRows = await db
+    .select()
+    .from(tasksTable)
+    .where(
+      projectId
+        ? and(
+            eq(tasksTable.householdId, householdId),
+            eq(tasksTable.projectId, projectId),
+          )
+        : eq(tasksTable.householdId, householdId),
+    )
+    .orderBy(desc(tasksTable.createdAt));
+
+  if (!taskRows.length) return [];
+  const assignments = await db
+    .select({
+      taskId: taskAssigneesTable.taskId,
+      id: householdMembersTable.id,
+      displayName: usersTable.displayName,
+      email: usersTable.email,
+      avatarUrl: usersTable.avatarUrl,
+      role: householdMembersTable.role,
+    })
+    .from(taskAssigneesTable)
+    .innerJoin(
+      householdMembersTable,
+      eq(taskAssigneesTable.householdMemberId, householdMembersTable.id),
+    )
+    .innerJoin(usersTable, eq(householdMembersTable.userId, usersTable.id))
+    .where(
+      and(
+        eq(householdMembersTable.householdId, householdId),
+        inArray(
+          taskAssigneesTable.taskId,
+          taskRows.map((task) => task.id),
+        ),
+      ),
+    );
+
+  return taskRows.map((task) => ({
+    id: task.id,
+    title: task.title,
+    description: task.description,
+    dueDate: task.dueDate,
+    status: task.status,
+    projectId: task.projectId,
+    assignees: assignments
+      .filter((assignment) => assignment.taskId === task.id)
+      .map(({ taskId: _taskId, ...member }) => member),
+  }));
+}
+
+async function projectResponses(householdId: string) {
+  const rows = await db
+    .select({
+      id: projectsTable.id,
+      name: projectsTable.name,
+      description: projectsTable.description,
+      taskCount: sql<number>`count(${tasksTable.id})::int`,
+      completedTaskCount:
+        sql<number>`count(${tasksTable.id}) filter (where ${tasksTable.status} = 'done')::int`,
+    })
+    .from(projectsTable)
+    .leftJoin(tasksTable, eq(projectsTable.id, tasksTable.projectId))
+    .where(eq(projectsTable.householdId, householdId))
+    .groupBy(projectsTable.id)
+    .orderBy(desc(projectsTable.updatedAt));
+  return rows;
+}
+
+router.get("/households", async (req, res): Promise<void> => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const rows = await db
+    .select({
+      id: householdsTable.id,
+      name: householdsTable.name,
+      role: householdMembersTable.role,
+      memberCount: sql<number>`(
+        select count(*)::int from household_members hm
+        where hm.household_id = ${householdsTable.id}
+      )`,
+      openTaskCount: sql<number>`(
+        select count(*)::int from tasks t
+        where t.household_id = ${householdsTable.id} and t.status <> 'done'
+      )`,
+    })
+    .from(householdMembersTable)
+    .innerJoin(
+      householdsTable,
+      eq(householdMembersTable.householdId, householdsTable.id),
+    )
+    .where(eq(householdMembersTable.userId, user.id))
+    .orderBy(asc(householdsTable.name));
+  res.json(ListHouseholdsResponse.parse(rows));
+});
+
+router.post("/households", async (req, res): Promise<void> => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const parsed = CreateHouseholdBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const joinCode = createJoinCode();
+  const household = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(householdsTable)
+      .values({
+        name: parsed.data.name,
+        createdByUserId: user.id,
+        joinCodeHash: hashCode(joinCode),
+      })
+      .returning();
+    await tx.insert(householdMembersTable).values({
+      householdId: created.id,
+      userId: user.id,
+      role: "owner",
+    });
+    return created;
+  });
+  res.status(201).json(
+    CreateHouseholdResponse.parse({
+      household: {
+        id: household.id,
+        name: household.name,
+        role: "owner",
+        memberCount: 1,
+        openTaskCount: 0,
+      },
+      joinCode,
+    }),
+  );
+});
+
+router.post("/households/join", async (req, res): Promise<void> => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const parsed = JoinHouseholdBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [household] = await db
+    .select()
+    .from(householdsTable)
+    .where(eq(householdsTable.joinCodeHash, hashCode(parsed.data.code)))
+    .limit(1);
+  if (!household) {
+    res.status(404).json({ error: "Invalid join code" });
+    return;
+  }
+  await db
+    .insert(householdMembersTable)
+    .values({ householdId: household.id, userId: user.id, role: "member" })
+    .onConflictDoNothing();
+  const [memberCount] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(householdMembersTable)
+    .where(eq(householdMembersTable.householdId, household.id));
+  const [openTaskCount] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(tasksTable)
+    .where(
+      and(
+        eq(tasksTable.householdId, household.id),
+        ne(tasksTable.status, "done"),
+      ),
+    );
+  res.json(
+    JoinHouseholdResponse.parse({
+      id: household.id,
+      name: household.name,
+      role: "member",
+      memberCount: memberCount.count,
+      openTaskCount: openTaskCount.count,
+    }),
+  );
+});
+
+router.get(
+  "/households/:householdId/dashboard",
+  async (req, res): Promise<void> => {
+    const params = GetHouseholdDashboardParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const auth = await requireMember(req, res, params.data.householdId);
+    if (!auth) return;
+    const [household] = await db
+      .select()
+      .from(householdsTable)
+      .where(eq(householdsTable.id, params.data.householdId))
+      .limit(1);
+    const [members, projects, tasks] = await Promise.all([
+      membersForHousehold(params.data.householdId),
+      projectResponses(params.data.householdId),
+      taskResponses(params.data.householdId),
+    ]);
+    res.json(
+      GetHouseholdDashboardResponse.parse({
+        id: household.id,
+        name: household.name,
+        role: auth.membership.role,
+        members,
+        projects,
+        tasks,
+      }),
+    );
+  },
+);
+
+router.post(
+  "/households/:householdId/projects",
+  async (req, res): Promise<void> => {
+    const params = CreateProjectParams.safeParse(req.params);
+    const body = CreateProjectBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid project" });
+      return;
+    }
+    const auth = await requireMember(req, res, params.data.householdId);
+    if (!auth) return;
+    const [project] = await db
+      .insert(projectsTable)
+      .values({
+        householdId: params.data.householdId,
+        name: body.data.name,
+        description: body.data.description ?? null,
+        createdByUserId: auth.user.id,
+      })
+      .returning();
+    res.status(201).json(
+      CreateProjectResponse.parse({
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        taskCount: 0,
+        completedTaskCount: 0,
+      }),
+    );
+  },
+);
+
+router.get(
+  "/households/:householdId/projects/:projectId",
+  async (req, res): Promise<void> => {
+    const params = GetProjectParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const auth = await requireMember(req, res, params.data.householdId);
+    if (!auth) return;
+    const [project] = await db
+      .select()
+      .from(projectsTable)
+      .where(
+        and(
+          eq(projectsTable.id, params.data.projectId),
+          eq(projectsTable.householdId, params.data.householdId),
+        ),
+      )
+      .limit(1);
+    if (!project) {
+      res.status(404).json({ error: "Project not found" });
+      return;
+    }
+    const [members, tasks] = await Promise.all([
+      membersForHousehold(params.data.householdId),
+      taskResponses(params.data.householdId, params.data.projectId),
+    ]);
+    res.json(
+      GetProjectResponse.parse({
+        project: {
+          id: project.id,
+          name: project.name,
+          description: project.description,
+          taskCount: tasks.length,
+          completedTaskCount: tasks.filter((task) => task.status === "done").length,
+        },
+        members,
+        tasks,
+      }),
+    );
+  },
+);
+
+router.post(
+  "/households/:householdId/tasks",
+  async (req, res): Promise<void> => {
+    const params = CreateTaskParams.safeParse(req.params);
+    const body = CreateTaskBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid task" });
+      return;
+    }
+    const auth = await requireMember(req, res, params.data.householdId);
+    if (!auth) return;
+    if (body.data.projectId) {
+      const [project] = await db
+        .select({ id: projectsTable.id })
+        .from(projectsTable)
+        .where(
+          and(
+            eq(projectsTable.id, body.data.projectId),
+            eq(projectsTable.householdId, params.data.householdId),
+          ),
+        )
+        .limit(1);
+      if (!project) {
+        res.status(400).json({ error: "Project is not in this household" });
+        return;
+      }
+    }
+    const assigneeIds = body.data.assigneeIds ?? [];
+    if (assigneeIds.length) {
+      const valid = await db
+        .select({ id: householdMembersTable.id })
+        .from(householdMembersTable)
+        .where(
+          and(
+            eq(householdMembersTable.householdId, params.data.householdId),
+            inArray(householdMembersTable.id, assigneeIds),
+          ),
+        );
+      if (valid.length !== new Set(assigneeIds).size) {
+        res.status(400).json({ error: "Invalid household assignee" });
+        return;
+      }
+    }
+    const task = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(tasksTable)
+        .values({
+          householdId: params.data.householdId,
+          projectId: body.data.projectId ?? null,
+          title: body.data.title,
+          description: body.data.description ?? null,
+          dueDate: toDateString(body.data.dueDate) ?? null,
+          createdByUserId: auth.user.id,
+        })
+        .returning();
+      if (assigneeIds.length) {
+        await tx.insert(taskAssigneesTable).values(
+          [...new Set(assigneeIds)].map((householdMemberId) => ({
+            taskId: created.id,
+            householdMemberId,
+          })),
+        );
+      }
+      return created;
+    });
+    const responses = await taskResponses(params.data.householdId);
+    const createdResponse = responses.find((item) => item.id === task.id);
+    res.status(201).json(CreateTaskResponse.parse(createdResponse));
+  },
+);
+
+router.patch(
+  "/households/:householdId/tasks/:taskId",
+  async (req, res): Promise<void> => {
+    const params = UpdateTaskParams.safeParse(req.params);
+    const body = UpdateTaskBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid task update" });
+      return;
+    }
+    const auth = await requireMember(req, res, params.data.householdId);
+    if (!auth) return;
+    const [updated] = await db
+      .update(tasksTable)
+      .set({
+        ...(body.data.status ? { status: body.data.status } : {}),
+        ...(body.data.title ? { title: body.data.title } : {}),
+        ...(body.data.dueDate !== undefined
+          ? { dueDate: toDateString(body.data.dueDate) }
+          : {}),
+      })
+      .where(
+        and(
+          eq(tasksTable.id, params.data.taskId),
+          eq(tasksTable.householdId, params.data.householdId),
+        ),
+      )
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "Task not found" });
+      return;
+    }
+    const response = (
+      await taskResponses(params.data.householdId)
+    ).find((task) => task.id === updated.id);
+    res.json(UpdateTaskResponse.parse(response));
+  },
+);
+
+export default router;

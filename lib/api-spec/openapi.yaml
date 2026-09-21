@@ -1,22 +1,19 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Household Hub API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: household
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
-      summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +21,339 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /households:
+    get:
+      operationId: listHouseholds
+      tags: [household]
+      responses:
+        "200":
+          description: Households for the signed-in user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HouseholdSummary"
+    post:
+      operationId: createHousehold
+      tags: [household]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HouseholdInput"
+      responses:
+        "201":
+          description: Household created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseholdCreated"
+  /households/join:
+    post:
+      operationId: joinHousehold
+      tags: [household]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinHouseholdInput"
+      responses:
+        "200":
+          description: Household joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseholdSummary"
+  /households/{householdId}/dashboard:
+    parameters:
+      - $ref: "#/components/parameters/HouseholdId"
+    get:
+      operationId: getHouseholdDashboard
+      tags: [household]
+      responses:
+        "200":
+          description: Household dashboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseholdDashboard"
+  /households/{householdId}/projects:
+    parameters:
+      - $ref: "#/components/parameters/HouseholdId"
+    post:
+      operationId: createProject
+      tags: [household]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+  /households/{householdId}/projects/{projectId}:
+    parameters:
+      - $ref: "#/components/parameters/HouseholdId"
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getProject
+      tags: [household]
+      responses:
+        "200":
+          description: Project and its tasks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetail"
+  /households/{householdId}/tasks:
+    parameters:
+      - $ref: "#/components/parameters/HouseholdId"
+    post:
+      operationId: createTask
+      tags: [household]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskInput"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+  /households/{householdId}/tasks/{taskId}:
+    parameters:
+      - $ref: "#/components/parameters/HouseholdId"
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateTask
+      tags: [household]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdate"
+      responses:
+        "200":
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
 components:
+  parameters:
+    HouseholdId:
+      name: householdId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   schemas:
     HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+    HouseholdInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 80
+    JoinHouseholdInput:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          minLength: 4
+          maxLength: 32
+    ProjectInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 1000
+    TaskInput:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        description:
+          type: string
+          maxLength: 1000
+        dueDate:
+          type: string
+          format: date
+        projectId:
+          type: string
+          format: uuid
+        assigneeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    TaskUpdate:
       type: object
       properties:
         status:
           type: string
-      required:
-        - status
-
+          enum: [todo, in_progress, done]
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        dueDate:
+          type: ["string", "null"]
+          format: date
+    HouseholdSummary:
+      type: object
+      required: [id, name, role, memberCount, openTaskCount]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role:
+          type: string
+          enum: [owner, member]
+        memberCount:
+          type: integer
+        openTaskCount:
+          type: integer
+    HouseholdCreated:
+      type: object
+      required: [household, joinCode]
+      properties:
+        household:
+          $ref: "#/components/schemas/HouseholdSummary"
+        joinCode:
+          type: string
+    Member:
+      type: object
+      required: [id, displayName, email, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        email:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [owner, member]
+    Project:
+      type: object
+      required: [id, name, description, taskCount, completedTaskCount]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        taskCount:
+          type: integer
+        completedTaskCount:
+          type: integer
+    Task:
+      type: object
+      required: [id, title, description, dueDate, status, projectId, assignees]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        dueDate:
+          type: ["string", "null"]
+          format: date
+        status:
+          type: string
+          enum: [todo, in_progress, done]
+        projectId:
+          type: ["string", "null"]
+          format: uuid
+        assignees:
+          type: array
+          items:
+            $ref: "#/components/schemas/Member"
+    HouseholdDashboard:
+      type: object
+      required: [id, name, role, members, projects, tasks]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role:
+          type: string
+          enum: [owner, member]
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/Member"
+        projects:
+          type: array
+          items:
+            $ref: "#/components/schemas/Project"
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+    ProjectDetail:
+      type: object
+      required: [project, members, tasks]
+      properties:
+        project:
+          $ref: "#/components/schemas/Project"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/Member"
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"

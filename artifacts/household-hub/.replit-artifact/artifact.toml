@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Household Hub"
+description = "A responsive household coordination app for creating or joining a household, managing members, assigning shared tasks, and organizing project-specific work."
+version = "1.0.0"
+id = "artifacts/household-hub"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24226
+
+[services.development]
+run = "pnpm --filter @workspace/household-hub run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/household-hub", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/household-hub/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24226"
+BASE_PATH = "/"
