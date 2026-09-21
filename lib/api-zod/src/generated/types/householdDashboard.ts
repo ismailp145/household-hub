@@ -5,6 +5,7 @@
  * Household Hub API
  * OpenAPI spec version: 0.1.0
  */
+import type { ActivityEvent } from './activityEvent';
 import type { HouseholdDashboardRole } from './householdDashboardRole';
 import type { Member } from './member';
 import type { Project } from './project';
@@ -17,4 +18,5 @@ export interface HouseholdDashboard {
   members: Member[];
   projects: Project[];
   tasks: Task[];
+  activity: ActivityEvent[];
 }

@@ -443,6 +443,10 @@ router.get(
       .from(householdsTable)
       .where(eq(householdsTable.id, params.data.householdId))
       .limit(1);
+    if (!household) {
+      res.status(404).json({ error: "Household not found" });
+      return;
+    }
     const [members, projects, tasks, activity] = await Promise.all([
       membersForHousehold(params.data.householdId),
       projectResponses(params.data.householdId),
@@ -663,7 +667,7 @@ router.patch(
       res.status(404).json({ error: "Task not found" });
       return;
     }
-    if (body.data.assigneeIds) {
+    if (body.data.assigneeIds !== undefined) {
       if (
         !(await validateAssignees(
           res,
